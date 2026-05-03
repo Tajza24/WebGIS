@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebGIS Sekolah & Universitas Bekasi</title>
+  <meta name="description"
+    content="Peta interaktif persebaran sekolah dan universitas di Kota Bekasi berdasarkan data OpenStreetMap." />
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #21262d;
+      --border: #30363d;
+      --accent: #58a6ff;
+      --accent2: #3fb950;
+      --accent3: #f78166;
+      --text: #e6edf3;
+      --text2: #8b949e;
+      --school-color: #58a6ff;
+      --univ-color: #f0883e;
+      --radius: 12px;
+      --shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+
+    html,
+    body {
+      height: 100%;
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    /* ── HEADER ── */
+    #header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      height: 58px;
+      background: rgba(22, 27, 34, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 16px;
+    }
+
+    #header h1 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #header h1 span.dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: inline-block;
+      box-shadow: 0 0 8px var(--accent);
+    }
+
+    #header .subtitle {
+      font-size: 0.75rem;
+      color: var(--text2);
+      margin-left: auto;
+    }
+
+    /* ── MAP ── */
+    #map {
+      position: fixed;
+      top: 58px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+    }
+
+    /* ── SIDEBAR ── */
+    #sidebar {
+      position: fixed;
+      top: 70px;
+      left: 14px;
+      width: 280px;
+      z-index: 900;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .card {
+      background: rgba(22, 27, 34, 0.90);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .card-title {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text2);
+      margin-bottom: 10px;
+    }
+
+    /* Stat chips */
+    .stats {
+      display: flex;
+      gap: 8px;
+    }
+
+    .stat-chip {
+      flex: 1;
+      text-align: center;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 4px;
+    }
+
+    .stat-chip .val {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .stat-chip .lbl {
+      font-size: 0.62rem;
+      color: var(--text2);
+      margin-top: 2px;
+    }
+
+    /* Legend */
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      font-size: 0.8rem;
+    }
+
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* Filter */
+    .filter-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .filter-btn {
+      flex: 1;
+      padding: 7px 4px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface2);
+      color: var(--text);
+      font-size: 0.72rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .filter-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .filter-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    /* Search */
+    #search-box {
+      width: 100%;
+      padding: 8px 12px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.8rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    #search-box::placeholder {
+      color: var(--text2);
+    }
+
+    #search-box:focus {
+      border-color: var(--accent);
+    }
+
+    /* Result list */
+    #result-list {
+      max-height: 180px;
+      overflow-y: auto;
+      margin-top: 8px;
+    }
+
+    #result-list::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    #result-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    #result-list::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 4px;
+    }
+
+    .result-item {
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      color: var(--text2);
+      transition: background 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .result-item:hover {
+      background: var(--surface2);
+      color: var(--text);
+    }
+
+    .result-item .r-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .no-result {
+      font-size: 0.75rem;
+      color: var(--text2);
+      padding: 8px 10px;
+    }
+
+    /* ── POPUP ── */
+    .leaflet-popup-content-wrapper {
+      background: rgba(22, 27, 34, 0.97) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: 12px !important;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6) !important;
+      color: var(--text) !important;
+      font-family: 'Inter', sans-serif !important;
+    }
+
+    .leaflet-popup-tip {
+      background: rgba(22, 27, 34, 0.97) !important;
+    }
+
+    .leaflet-popup-close-button {
+      color: var(--text2) !important;
+      font-size: 18px !important;
+      top: 8px !important;
+      right: 10px !important;
+    }
+
+    .popup-inner {
+      min-width: 220px;
+      max-width: 280px;
+    }
+
+    .popup-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .popup-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .popup-icon.school {
+      background: rgba(88, 166, 255, 0.15);
+    }
+
+    .popup-icon.university {
+      background: rgba(240, 136, 62, 0.15);
+    }
+
+    .popup-title {
+      font-weight: 600;
+      font-size: 0.9rem;
+      line-height: 1.3;
+      color: var(--text);
+    }
+
+    .popup-badge {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .badge-school {
+      background: rgba(88, 166, 255, 0.2);
+      color: var(--school-color);
+    }
+
+    .badge-univ {
+      background: rgba(240, 136, 62, 0.2);
+      color: var(--univ-color);
+    }
+
+    .popup-attrs {
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+    }
+
+    .attr-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 3px 0;
+      font-size: 0.76rem;
+    }
+
+    .attr-key {
+      color: var(--text2);
+      font-weight: 500;
+    }
+
+    .attr-val {
+      color: var(--text);
+      font-weight: 400;
+      text-align: right;
+      max-width: 160px;
+      word-break: break-word;
+    }
+
+    .attr-val.null {
+      color: var(--border);
+      font-style: italic;
+    }
+
+    .popup-osm {
+      margin-top: 10px;
+      text-align: center;
+    }
+
+    .popup-osm a {
+      font-size: 0.7rem;
+      color: var(--accent);
+      text-decoration: none;
+      padding: 5px 14px;
+      border: 1px solid rgba(88, 166, 255, 0.3);
+      border-radius: 20px;
+      display: inline-block;
+      transition: all 0.2s;
+    }
+
+    .popup-osm a:hover {
+      background: rgba(88, 166, 255, 0.1);
+    }
+
+    /* Leaflet overrides */
+    .leaflet-control-zoom {
+      border: none !important;
+      box-shadow: var(--shadow) !important;
+    }
+
+    .leaflet-control-zoom a {
+      background: rgba(22, 27, 34, 0.92) !important;
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border) !important;
+      color: var(--text) !important;
+    }
+
+    .leaflet-control-zoom a:hover {
+      background: var(--surface2) !important;
+    }
+
+    .leaflet-control-attribution {
+      background: rgba(13, 17, 23, 0.75) !important;
+      color: var(--text2) !important;
+      font-size: 10px !important;
+    }
+
+    .leaflet-control-attribution a {
+      color: var(--accent) !important;
+    }
+
+    /* Count badge in header */
+    .count-badge {
+      background: rgba(88, 166, 255, 0.15);
+      border: 1px solid rgba(88, 166, 255, 0.3);
+      color: var(--accent);
+      padding: 2px 10px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+
+    @media (max-width: 600px) {
+      #sidebar {
+        width: calc(100vw - 28px);
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- HEADER -->
+  <header id="header">
+    <h1><span class="dot"></span> WebGIS Bekasi</h1>
+    <span style="font-size:0.78rem;color:var(--text2);margin-left:6px;">Sekolah &amp; Universitas</span>
+    <span class="count-badge" id="total-badge">Memuat...</span>
+    <span class="subtitle">Data: OpenStreetMap</span>
+  </header>
+
+  <!-- MAP -->
+  <div id="map"></div>
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar">
+
+    <!-- Stats -->
+    <div class="card">
+      <div class="card-title">Statistik Data</div>
+      <div class="stats">
+        <div class="stat-chip">
+          <div class="val" id="stat-total">—</div>
+          <div class="lbl">Total</div>
+        </div>
+        <div class="stat-chip">
+          <div class="val" id="stat-school" style="color:var(--school-color)">—</div>
+          <div class="lbl">Sekolah</div>
+        </div>
+        <div class="stat-chip">
+          <div class="val" id="stat-univ" style="color:var(--univ-color)">—</div>
+          <div class="lbl">Universitas</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter -->
+    <div class="card">
+      <div class="card-title">Filter Amenitas</div>
+      <div class="filter-row">
+        <button class="filter-btn active" id="btn-all" onclick="setFilter('all')">Semua</button>
+        <button class="filter-btn" id="btn-school" onclick="setFilter('school')">Sekolah</button>
+        <button class="filter-btn" id="btn-university" onclick="setFilter('university')">Universitas</button>
+      </div>
+    </div>
+
+    <!-- Legenda -->
+    <div class="card">
+      <div class="card-title">Legenda</div>
+      <div class="legend-row">
+        <div class="legend-dot" style="background:var(--school-color);box-shadow:0 0 6px var(--school-color)"></div>
+        <span>Sekolah</span>
+      </div>
+      <div class="legend-row">
+        <div class="legend-dot" style="background:var(--univ-color);box-shadow:0 0 6px var(--univ-color)"></div>
+        <span>Universitas / Perguruan Tinggi</span>
+      </div>
+      <div class="legend-row" style="margin-top:6px">
+        <div style="width:12px;height:12px;border:2px solid var(--school-color);border-radius:3px;flex-shrink:0"></div>
+        <span style="font-size:0.75rem;color:var(--text2)">Marker titik = koordinat tunggal</span>
+      </div>
+      <div class="legend-row">
+        <div
+          style="width:12px;height:12px;border:2px solid var(--accent2);background:rgba(63,185,80,0.15);border-radius:3px;flex-shrink:0">
+        </div>
+        <span style="font-size:0.75rem;color:var(--text2)">Poligon = footprint gedung</span>
+      </div>
+    </div>
+
+    <!-- Pencarian -->
+    <div class="card">
+      <div class="card-title">Cari Lokasi</div>
+      <input type="text" id="search-box" placeholder="Ketik nama sekolah / universitas…"
+        oninput="doSearch(this.value)" />
+      <div id="result-list"></div>
+    </div>
+
+  </aside>
+
+  <script>
+    // ── MAP INIT ──────────────────────────────────────────────────────────
+    const map = L.map('map', { zoomControl: false }).setView([-6.27, 107.0], 11);
+
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+    // Basemap: OpenStreetMap
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19
+    }).addTo(map);
+
+    // ── MARKER FACTORY ────────────────────────────────────────────────────
+    function makeIcon(amenity) {
+      const color = amenity === 'university' ? '#f0883e' : '#58a6ff';
+      const emoji = amenity === 'university' ? '🎓' : '🏫';
+      return L.divIcon({
+        className: '',
+        html: `<div style="
+      width:30px;height:30px;border-radius:50%;
+      background:rgba(13,17,23,0.9);
+      border:2px solid ${color};
+      box-shadow:0 0 10px ${color}88;
+      display:flex;align-items:center;justify-content:center;
+      font-size:14px;cursor:pointer;
+      transition:transform 0.15s;
+    ">${emoji}</div>`,
+        iconSize: [30, 30],
+        iconAnchor: [15, 15],
+        popupAnchor: [0, -18]
+      });
+    }
+
+    // ── POPUP BUILDER ─────────────────────────────────────────────────────
+    function buildPopup(props, geomType) {
+      const isUniv = props.amenity === 'university';
+      const typeLabel = isUniv ? 'Universitas / PT' : 'Sekolah';
+      const iconClass = isUniv ? 'university' : 'school';
+      const badgeClass = isUniv ? 'badge-univ' : 'badge-school';
+      const emoji = isUniv ? '🎓' : '🏫';
+      const name = props.name || '<em style="color:var(--text2)">Tanpa Nama</em>';
+      const capacity = props.capacity ? props.capacity : null;
+      const isced = props.isced_level ? props.isced_level : null;
+      const osmUrl = `https://www.openstreetmap.org/${props.osm_type === 'nodes' ? 'node' : 'way'}/${props.osm_id}`;
+
+      const rows = [
+        ['OSM ID', props.osm_id],
+        ['Tipe Data', props.osm_type === 'nodes' ? 'Titik (Node)' : 'Poligon (Way)'],
+        ['Geometri', geomType],
+        ['Kapasitas', capacity],
+        ['ISCED Level', isced],
+      ];
+
+      const rowsHtml = rows.map(([k, v]) => `
+    <div class="attr-row">
+      <span class="attr-key">${k}</span>
+      <span class="attr-val ${v === null ? 'null' : ''}">${v !== null ? v : '—'}</span>
+    </div>`).join('');
+
+      return `
+    <div class="popup-inner">
+      <div class="popup-header">
+        <div class="popup-icon ${iconClass}">${emoji}</div>
+        <div>
+          <div class="popup-title">${name}</div>
+          <span class="popup-badge ${badgeClass}">${typeLabel}</span>
+        </div>
+      </div>
+      <div class="popup-attrs">${rowsHtml}</div>
+      <div class="popup-osm">
+        <a href="${osmUrl}" target="_blank" rel="noopener">🔗 Lihat di OpenStreetMap</a>
+      </div>
+    </div>`;
+    }
+
+    // ── LAYER GROUPS ──────────────────────────────────────────────────────
+    let allFeatures = [];
+    let layerGroup = L.layerGroup().addTo(map);
+    let currentFilter = 'all';
+
+    // ── STYLE FOR POLYGON ─────────────────────────────────────────────────
+    function polyStyle(amenity) {
+      const isUniv = amenity === 'university';
+      return {
+        color: isUniv ? '#f0883e' : '#3fb950',
+        weight: 2,
+        fillColor: isUniv ? '#f0883e' : '#3fb950',
+        fillOpacity: 0.18,
+        opacity: 0.9
+      };
+    }
+
+    // ── CENTROID CALCULATOR ───────────────────────────────────────────────
+    function getCentroid(geometry) {
+      let coords;
+      if (geometry.type === 'Polygon') {
+        coords = geometry.coordinates[0]; // outer ring
+      } else if (geometry.type === 'MultiPolygon') {
+        coords = geometry.coordinates[0][0]; // first polygon outer ring
+      } else {
+        return null;
+      }
+      let sumLat = 0, sumLng = 0;
+      for (let i = 0; i < coords.length; i++) {
+        sumLng += coords[i][0];
+        sumLat += coords[i][1];
+      }
+      return [sumLat / coords.length, sumLng / coords.length];
+    }
+
+    // ── RENDER FEATURES ───────────────────────────────────────────────────
+    function renderFeatures(filter) {
+      layerGroup.clearLayers();
+      const filtered = filter === 'all'
+        ? allFeatures
+        : allFeatures.filter(f => f.properties.amenity === filter);
+
+      filtered.forEach(feature => {
+        const props = feature.properties;
+        const geomType = feature.geometry.type;
+        const popupHtml = buildPopup(props, geomType);
+
+        if (geomType === 'Point') {
+          const [lng, lat] = feature.geometry.coordinates;
+          const marker = L.marker([lat, lng], { icon: makeIcon(props.amenity) });
+          marker.bindPopup(popupHtml, { maxWidth: 300, minWidth: 240 });
+          marker.feature = feature;
+          layerGroup.addLayer(marker);
+        } else if (geomType === 'Polygon' || geomType === 'MultiPolygon') {
+          // Polygon outline
+          const layer = L.geoJSON(feature, { style: polyStyle(props.amenity) });
+          layer.bindPopup(popupHtml, { maxWidth: 300, minWidth: 240 });
+          layerGroup.addLayer(layer);
+
+          // Centroid marker so polygon features also show emoji icons
+          const center = getCentroid(feature.geometry);
+          if (center) {
+            const marker = L.marker(center, { icon: makeIcon(props.amenity) });
+            marker.bindPopup(popupHtml, { maxWidth: 300, minWidth: 240 });
+            marker.feature = feature;
+            layerGroup.addLayer(marker);
+          }
+        }
+      });
+    }
+
+    // ── FILTER TOGGLE ─────────────────────────────────────────────────────
+    function setFilter(f) {
+      currentFilter = f;
+      ['all', 'school', 'university'].forEach(k => {
+        document.getElementById('btn-' + k).classList.toggle('active', k === f);
+      });
+      renderFeatures(f);
+      updateStats(f);
+    }
+
+    function updateStats(filter) {
+      const schools = allFeatures.filter(f => f.properties.amenity === 'school');
+      const univs = allFeatures.filter(f => f.properties.amenity === 'university');
+      const visible = filter === 'all' ? allFeatures : (filter === 'school' ? schools : univs);
+      document.getElementById('stat-total').textContent = visible.length;
+      document.getElementById('stat-school').textContent = filter === 'university' ? 0 : schools.length;
+      document.getElementById('stat-univ').textContent = filter === 'school' ? 0 : univs.length;
+      document.getElementById('total-badge').textContent = `${visible.length} fitur`;
+    }
+
+    // ── SEARCH ────────────────────────────────────────────────────────────
+    function doSearch(q) {
+      const list = document.getElementById('result-list');
+      list.innerHTML = '';
+      if (!q.trim()) return;
+      const found = allFeatures
+        .filter(f => f.properties.name && f.properties.name.toLowerCase().includes(q.toLowerCase()))
+        .slice(0, 15);
+      if (!found.length) {
+        list.innerHTML = '<div class="no-result">Tidak ada hasil ditemukan.</div>';
+        return;
+      }
+      found.forEach(f => {
+        const isUniv = f.properties.amenity === 'university';
+        const color = isUniv ? 'var(--univ-color)' : 'var(--school-color)';
+        const div = document.createElement('div');
+        div.className = 'result-item';
+        div.innerHTML = `<div class="r-dot" style="background:${color}"></div><span>${f.properties.name}</span>`;
+        div.onclick = () => {
+          const geom = f.geometry;
+          let latlng;
+          if (geom.type === 'Point') {
+            latlng = [geom.coordinates[1], geom.coordinates[0]];
+          } else if (geom.type === 'Polygon') {
+            const c = geom.coordinates[0][0];
+            latlng = [c[1], c[0]];
+          }
+          if (latlng) {
+            map.flyTo(latlng, 16, { duration: 1.2 });
+            setTimeout(() => {
+              layerGroup.eachLayer(layer => {
+                if (layer.feature === f || (layer.getLayers && layer.getLayers().length)) {
+                  layer.openPopup && layer.openPopup();
+                }
+              });
+            }, 1400);
+          }
+          document.getElementById('search-box').value = f.properties.name;
+          list.innerHTML = '';
+        };
+        list.appendChild(div);
+      });
+    }
+
+    // ── LOAD GEOJSON ──────────────────────────────────────────────────────
+    fetch('Bekasi_School_University.geojson')
+      .then(r => {
+        if (!r.ok) throw new Error('Gagal memuat GeoJSON: ' + r.status);
+        return r.json();
+      })
+      .then(data => {
+        allFeatures = data.features;
+        renderFeatures('all');
+        updateStats('all');
+
+        // Fit bounds
+        const gjLayer = L.geoJSON(data);
+        map.fitBounds(gjLayer.getBounds(), { padding: [40, 40] });
+      })
+      .catch(err => {
+        console.error(err);
+        document.getElementById('total-badge').textContent = '⚠ GeoJSON tidak ditemukan';
+        document.getElementById('total-badge').style.color = 'var(--accent3)';
+      });
+  </script>
+</body>
+
+</html>
